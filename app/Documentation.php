@@ -4,6 +4,7 @@ namespace App;
 
 use Illuminate\Filesystem\Filesystem;
 use Illuminate\Contracts\Cache\Repository as Cache;
+use Symfony\Component\DomCrawler\Crawler;
 
 class Documentation
 {
@@ -66,7 +67,10 @@ class Documentation
             $path = base_path('resources/docs/'.$version.'/'.$page.'.md');
 
             if ($this->files->exists($path)) {
-                return $this->replaceLinks($version, markdown($this->files->get($path)));
+                $content = markdown($this->files->get($path));
+                $content = $this->replaceLinks($version, $content);
+                $content = $this->replaceIcons($content);
+                return $content;
             }
 
             return null;
@@ -83,6 +87,45 @@ class Documentation
     public static function replaceLinks($version, $content)
     {
         return str_replace('{{version}}', $version, $content);
+    }
+
+    /**
+     * Replace the icon place-holder text with their respective svgs.
+     * @param  string  $content
+     * @return string
+     */
+    public static function replaceIcons($content)
+    {
+        preg_match('/\{(.*?)\}/', $content, $match);
+
+        if (!$match) {
+            return $content;
+        }
+
+        $icon = $match[1];
+        $word = $match[1];
+
+        if ($icon == "note"
+            || $icon == "tip"
+            || $icon == "laracast"
+            || $icon == "video"
+        ) {
+            $icon = svg($icon);
+        } else {
+            return $content;
+        }
+
+        $content = preg_replace('/\{(.*?)\}/', "<span class=\"flag\"><span class=\"svg\"> $icon </span></span>",
+            $content, 1);
+
+        $crawler = (new Crawler($content));
+        $blockquote = $crawler->filterXPath('//blockquote[descendant::span[contains(@class, "flag")]]')->getNode(0);
+        if ($blockquote) {
+            $blockquote->setAttribute("class", "has-icon $word");
+            $content = $crawler->html();
+        }
+
+        return $content;
     }
 
     /**
